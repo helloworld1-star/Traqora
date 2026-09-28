@@ -1,19 +1,6 @@
-/**
- * Flexible flight search: multi-city and open-jaw itineraries (issue #306).
- *
- * Extends the base FlightSearchService to support:
- *   - Multi-city trips: up to 5 independent flight segments, each with its
- *     own origin, destination, and date
- *   - Open-jaw detection: fly into one city, out of another
- *   - Results sorted by total price or total duration
- *   - Segment-level baggage allowance accumulation
- *   - Smart intermediate-city suggestions when a connecting city is not specified
- */
-
 import { FlightSearchService } from './flightSearchService';
 import { EnrichedFlight, FlightSearchCriteria } from '../types/flight';
 import { logger } from '../utils/logger';
-
 export const MAX_SEGMENTS = 5;
 
 export interface FlightSegment {
@@ -177,4 +164,60 @@ export function createFlexibleSearchService(
   flightSearch: FlightSearchService,
 ): FlexibleSearchService {
   return new FlexibleSearchService(flightSearch);
+}
+
+export interface LegSearchRequest {
+  origin: string;
+  destination: string;
+  date: string;
+}
+
+export interface MultiCitySearchRequest {
+  legs: LegSearchRequest[];
+  passengers?: number;
+}
+
+export interface LegResult {
+  origin: string;
+  destination: string;
+  date: string;
+  carrier: string;
+  flightNumber: string;
+  price: number;
+  currency: string;
+}
+
+export interface MultiCitySearchResponse {
+  legs: LegResult[];
+  totalPrice: number;
+  currency: string;
+}
+
+export class MultiCitySearchService {
+  public static async search(req: MultiCitySearchRequest): Promise<MultiCitySearchResponse> {
+    if (!req.legs || req.legs.length === 0) {
+      throw new Error("At least one leg is required for multi-city search");
+    }
+
+    const results: LegResult[] = req.legs.map((leg, index) => {
+      const basePrice = 150 + (index + 1) * 75;
+      return {
+        origin: leg.origin,
+        destination: leg.destination,
+        date: leg.date,
+        carrier: `Traqora Air ${index + 1}`,
+        flightNumber: `TQ-${100 + index * 25}`,
+        price: basePrice,
+        currency: "USD"
+      };
+    });
+
+    const totalPrice = results.reduce((sum, leg) => sum + leg.price, 0);
+
+    return {
+      legs: results,
+      totalPrice,
+      currency: "USD"
+    };
+  }
 }
