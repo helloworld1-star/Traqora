@@ -1,6 +1,5 @@
 import { Keypair } from "stellar-sdk";
 import crypto from "crypto";
-import { Keypair } from '@stellar/stellar-base';
 
 
 /**
