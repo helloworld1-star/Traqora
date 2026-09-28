@@ -1,4 +1,7 @@
+import { Keypair } from "stellar-sdk";
+import crypto from "crypto";
 import { Keypair } from '@stellar/stellar-base';
+
 
 /**
  * Interface for wallet-specific signature extraction logic.
@@ -56,5 +59,52 @@ export class WalletAuthFactory {
         const adapter = this.adapters[walletType.toLowerCase()];
         if (!adapter) throw new Error(`Unsupported wallet type: ${walletType}`);
         return adapter;
+    }
+}
+export interface ChallengePayload {
+  nonce: string;
+  message: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+export class WalletSignatureAdapter {
+  private static challenges = new Map<string, { message: string; expiresAt: number }>();
+
+  public static generateChallenge(publicKey: string): ChallengePayload {
+    const nonce = crypto.randomBytes(32).toString("hex");
+    const issuedAt = Date.now();
+    const expiresAt = issuedAt + 5 * 60 * 1000; // 5 minutes validity
+    const message = `Authenticate with Traqora
+PublicKey: ${publicKey}
+Nonce: ${nonce}
+Timestamp: ${issuedAt}`;
+
+    this.challenges.set(publicKey, { message, expiresAt });
+    return { nonce, message, issuedAt, expiresAt };
+  }
+
+  public static verifySignature(publicKey: string, signatureBase64: string): boolean {
+    const record = this.challenges.get(publicKey);
+    if (!record) {
+      return false;
+    }
+
+    if (Date.now() > record.expiresAt) {
+      this.challenges.delete(publicKey);
+      return false;
+    }
+
+    try {
+      const keypair = Keypair.fromPublicKey(publicKey);
+      const messageBuffer = Buffer.from(record.message, "utf8");
+      const signatureBuffer = Buffer.from(signatureBase64, "base64");
+
+      const isValid = keypair.verify(messageBuffer, signatureBuffer);
+      this.challenges.delete(publicKey);
+      return isValid;
+    } catch (error) {
+      return false;
+    }
     }
 }
